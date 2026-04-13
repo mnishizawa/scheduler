@@ -27,7 +27,30 @@ struct JobConfig {
 }
 
 fn main() {
-    let config_path = resolve_config_path();
+    let args: Vec<String> = env::args().collect();
+
+    // Basic CLI flag handling
+    if args.contains(&"--help".to_string()) || args.contains(&"-h".to_string()) {
+        println!("schedule - Natural language job scheduler");
+        println!();
+        println!("USAGE:");
+        println!("  schedule [CONFIG_PATH]");
+        println!();
+        println!("FLAGS:");
+        println!("  -h, --help      Prints help information");
+        println!("  -v, --version   Prints version information");
+        println!();
+        println!("ARGS:");
+        println!("  [CONFIG_PATH]   Path to the config file (default: ~/.config/schedule/config.toml)");
+        return;
+    }
+
+    if args.contains(&"--version".to_string()) || args.contains(&"-v".to_string()) {
+        println!("schedule {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
+    let config_path = resolve_config_path(&args);
 
     let raw = fs::read_to_string(&config_path).unwrap_or_else(|e| {
         eprintln!("❌ Could not read '{}': {}", config_path.display(), e);
@@ -80,9 +103,8 @@ fn main() {
 
 /// Use the path given on the command line, or fall back to
 /// `~/.config/schedule/config.toml`.
-fn resolve_config_path() -> PathBuf {
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 {
+fn resolve_config_path(args: &[String]) -> PathBuf {
+    if args.len() > 1 && !args[1].starts_with('-') {
         PathBuf::from(&args[1])
     } else {
         let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
