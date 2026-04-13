@@ -1,0 +1,13 @@
+# Schedule configuration
+# Run `schedule` (or `schedule path/to/this-file.toml`) to start.
+
+[[job]]
+name     = "Hello World"
+schedule = "every monday at 2:30pm"
+command  = "echo"
+args     = ["hello", "world"]
+
+[[job]]
+name     = "Check Date"
+schedule = "every day at 8am"
+command  = "date"
