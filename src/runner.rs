@@ -1,10 +1,18 @@
 use crate::parser::Schedule;
 use chrono::Local;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-pub fn run(name: Option<&str>, schedule: &Schedule, cmd: &str, args: &[String]) {
+pub fn run(
+    name: Option<&str>,
+    schedule: &Schedule,
+    cmd: &str,
+    args: &[String],
+    stop_signal: Arc<AtomicBool>,
+) {
     let job_name = name.unwrap_or(cmd);
     println!("🗓  Job [{}]: {}", job_name, schedule.description());
     if schedule.is_one_shot() {
@@ -13,6 +21,10 @@ pub fn run(name: Option<&str>, schedule: &Schedule, cmd: &str, args: &[String]) 
     println!("   Press Ctrl+C to cancel.\n");
 
     loop {
+        if stop_signal.load(Ordering::Relaxed) {
+            break;
+        }
+
         let now = Local::now();
         let next = schedule.next_fire(now);
         let wait_secs = (next - now).num_seconds().max(0) as u64;
@@ -24,16 +36,22 @@ pub fn run(name: Option<&str>, schedule: &Schedule, cmd: &str, args: &[String]) 
             humanize(wait_secs)
         );
 
-        // Sleep in chunks so Ctrl+C is responsive and sleep imprecision is absorbed.
+        // Sleep in chunks so Ctrl+C and stop signal are responsive.
         let mut remaining = wait_secs;
         while remaining > 0 {
-            let chunk = remaining.min(30);
+            if stop_signal.load(Ordering::Relaxed) {
+                return;
+            }
+            let chunk = remaining.min(1); // Check every second for stop signal
             sleep(Duration::from_secs(chunk));
             remaining = remaining.saturating_sub(chunk);
         }
 
-        // Spin-wait for the exact second in case sleep returned slightly early.
+        // Spin-wait for the exact second
         loop {
+            if stop_signal.load(Ordering::Relaxed) {
+                return;
+            }
             if Local::now() >= next {
                 break;
             }
@@ -59,8 +77,15 @@ pub fn run(name: Option<&str>, schedule: &Schedule, cmd: &str, args: &[String]) 
             break;
         }
 
-        // Small buffer so a slow wake-up can't double-fire in the same minute.
-        sleep(Duration::from_secs(2));
+        // Small buffer so it doesn't double-fire immediately if it wakes up slightly late
+        let mut buffer = 2;
+        while buffer > 0 {
+            if stop_signal.load(Ordering::Relaxed) {
+                return;
+            }
+            sleep(Duration::from_secs(1));
+            buffer -= 1;
+        }
     }
 }
 

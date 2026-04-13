@@ -9,3 +9,6 @@ edition = "2021"
 chrono = "0.4"
 serde = { version = "1", features = ["derive"] }
 toml = "0.7"
+clap = { version = "=3.1.18", features = ["derive"] }
+notify = "=4.0.17"
+indexmap = "=2.2.6"
