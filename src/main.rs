@@ -80,6 +80,9 @@ fn main() {
         (config.jobs, Some(default_config_path.clone()))
     };
 
+    println!("🔍 Validating configured jobs...");
+    validate_jobs(&jobs);
+
     if args.persist {
         // "Test-and-Save" logic:
         // Execute the command(s) once immediately.
@@ -168,6 +171,9 @@ fn main() {
                 std::thread::sleep(Duration::from_millis(500));
                 let new_config = load_config(path);
                 current_jobs = new_config.jobs;
+                
+                println!("🔍 Validating reloaded jobs...");
+                validate_jobs(&current_jobs);
             }
         } else {
             break;
@@ -215,4 +221,40 @@ fn persist_jobs(new_jobs: &[JobConfig], path: &PathBuf) {
         eprintln!("❌ Failed to write config to '{}': {}", path.display(), e);
         std::process::exit(1);
     });
+}
+
+fn validate_jobs(jobs: &[JobConfig]) {
+    for job in jobs {
+        let job_name = job.name.as_deref().unwrap_or(&job.command);
+        let trimmed_cmd = job.command.trim();
+
+        if trimmed_cmd != job.command {
+            eprintln!(
+                "⚠️  Warning: Job '{}' has leading or trailing whitespace in its command (\"{}\"). This will likely cause execution to fail.",
+                job_name, job.command
+            );
+        } else if which::which(&job.command).is_err() {
+            eprintln!(
+                "⚠️  Warning: Command '{}' for job '{}' was not found in PATH or is not executable. It may fail when scheduled.",
+                job.command, job_name
+            );
+        }
+
+        for (i, arg) in job.args.iter().enumerate() {
+            if arg.trim() != arg {
+                eprintln!(
+                    "⚠️  Warning: Argument {} (\"{}\") for job '{}' has leading or trailing whitespace. It may be interpreted literally by the program.",
+                    i + 1, arg, job_name
+                );
+            }
+            
+            // Check if multiple arguments are accidentally combined into one string
+            if arg.starts_with('-') && arg.contains(' ') && !arg.contains('=') && !arg.contains('{') {
+                eprintln!(
+                    "⚠️  Warning: Argument {} (\"{}\") for job '{}' looks like multiple arguments combined into one string. If this is a flag with a separate value, considering splitting it into multiple items in the args array.",
+                    i + 1, arg, job_name
+                );
+            }
+        }
+    }
 }

@@ -12,3 +12,4 @@ toml = "0.7"
 clap = { version = "=3.1.18", features = ["derive"] }
 notify = "=4.0.17"
 indexmap = "=2.2.6"
+which = "8.0.2"
